@@ -1,0 +1,6 @@
+Miniconda3-latest-Linux-x86_64.sh
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+runs/
