@@ -79,7 +79,7 @@ MoE 是 Mixture of Experts。它不是让每个 token 都经过同一套完整 F
 
 ## 4. 实验结构
 
-代码被拆成三个独立 CLI，避免把性能插桩和安全结论混在一起。
+代码被拆成四个独立 CLI，避免把性能插桩、安全结论和显存压力观测混在一起。
 
 ### 4.1 `cc-path-bench`
 
@@ -156,6 +156,20 @@ MoE 是 Mixture of Experts。它不是让每个 token 都经过同一套完整 F
 - MoE FFN 模块时延。
 
 这些内部时延只用于性能分析，不用于证明 CPU-GPU 传输路径泄露。如果 timing-only 特征在未来显示出预测能力，应归类为 GPU 执行时序侧信道，而不是 CPU-GPU transfer path 泄露。
+
+### 4.4 `memory-pressure-observe`
+
+用途：观测当前推理方案在显存不足时的行为。
+
+它会先人为占用一部分 GPU 显存，再使用当前 `device_map=auto` 加载模型，并记录：
+
+- 加载是否成功。
+- 是否触发 CPU/disk offload。
+- `hf_device_map`。
+- 加载前后 GPU 显存快照。
+- 可选的 1 token generate 耗时。
+
+这个工具不直接用于侧信道攻击结论，而是用于确认实验前提：模型到底是不是全驻留 GPU。
 
 ## 5. 实际运行环境
 
@@ -303,9 +317,122 @@ tokens_per_expert = 1, 4, 16, 64, 256
 
 本轮测得 BF16 GEMM 最大 achieved throughput 约为 51.82 TFLOP/s。这个数值用于本机 roofline 校准，不应直接当作 H20 官方峰值。
 
-## 9. 如何理解这次结果
+## 9. 显存不足时当前推理方案的行为
 
-### 9.1 为什么不能说 top-k 被传输路径泄露了
+为了确认“全模型驻留 GPU”这个前提在显存不足时是否仍然成立，本轮额外做了显存压力观测。方法是在加载模型前，先在 GPU 上人为分配占位 tensor，减少可用显存，然后仍然使用当前推理方案：
+
+```text
+AutoModelForCausalLM.from_pretrained(
+  model_path,
+  device_map="auto",
+  torch_dtype=bf16
+)
+```
+
+观测工具：
+
+```text
+memory-pressure-observe
+```
+
+输出目录：
+
+- `runs/qwen-memory-pressure-load-only/`
+- `runs/qwen-memory-pressure-baseline-generate/`
+
+### 9.1 无显存压力：全模型驻留 GPU
+
+当 reservation 为 0GiB 时：
+
+```text
+status: loaded_generate_not_requested
+offload: False
+device_counts: {'0': 1}
+model_load_ms: 22454.8
+after_model_load: used 57.45 GiB, free 37.08 GiB
+```
+
+解释：没有人为显存压力时，`device_map=auto` 将整个模型放到 GPU 0。模型加载后占用约 57.45GiB。
+
+在同样无显存压力下，打开 `--run-generate` 跑 1 token baseline：
+
+```text
+status: ok
+offload: False
+model_load_ms: 22870.4
+input_h2d_ms: 0.2812
+generate_ms: 1524.1
+output_tokens: 11
+after_generate: used 57.61 GiB
+```
+
+### 9.2 35GiB 显存占用：自动 CPU offload
+
+当先占用 35GiB GPU 显存时：
+
+```text
+status: loaded_with_offload_generate_skipped
+offload: True
+device_counts: {'0': 45, 'cpu': 7}
+model_load_ms: 23000.2
+after_reservation: used 35.57 GiB, free 58.97 GiB
+after_model_load:  used 87.23 GiB, free 7.30 GiB
+```
+
+部分 `hf_device_map` 显示：
+
+```text
+lm_head: cpu
+model.embed_tokens: 0
+model.layers.0: 0
+...
+model.layers.47: cpu
+model.norm: cpu
+model.rotary_emb: cpu
+```
+
+Transformers 同时输出提示：
+
+```text
+Some parameters are on the meta device because they were offloaded to the cpu.
+```
+
+这说明当前方案没有直接 OOM，而是自动把部分模块放到 CPU。
+
+### 9.3 45GiB 显存占用：更多 CPU offload
+
+当先占用 45GiB GPU 显存时：
+
+```text
+status: loaded_with_offload_generate_skipped
+offload: True
+device_counts: {'0': 37, 'cpu': 15}
+model_load_ms: 20122.0
+after_reservation: used 45.57 GiB, free 48.97 GiB
+after_model_load:  used 87.95 GiB, free 6.58 GiB
+```
+
+相比 35GiB reservation，更多模块被放到 CPU。GPU 仍被尽量填满，加载后只剩约 6 到 7GiB 空闲。
+
+### 9.4 对安全实验的影响
+
+这个结果很重要：
+
+- 在显存充足时，原始假设成立：模型全驻留 GPU，routing 在 GPU 内部完成。
+- 在显存不足时，`device_map=auto` 会触发 CPU offload。
+- CPU offload 后，推理路径不再是“全模型驻留 GPU”的路径。
+- CPU offload 可能引入新的 CPU-GPU 传输、CPU 执行等待和跨设备同步。
+
+因此，显存不足下观测到的 timing 或 transfer 差异，不能直接和前面的 `gpu-resident` 侧信道实验混在一起解释。后续应把两类场景分开命名：
+
+- `gpu-resident`：全模型 GPU 驻留。
+- `memory-pressure-offload`：显存压力触发 CPU offload。
+
+如果未来要研究 offload 场景的安全性，应单独记录 `hf_device_map`，并把 CPU offload 本身作为实验条件，而不是把它当作同一个推理方案下的噪声。
+
+## 10. 如何理解这次结果
+
+### 10.1 为什么不能说 top-k 被传输路径泄露了
 
 在这个默认单卡推理路径下：
 
@@ -318,7 +445,7 @@ tokens_per_expert = 1, 4, 16, 64, 256
 
 实验结果也符合这个判断：主预测结果相对 label shuffle 很高，但相对 length matched control 只高一点点。这说明模型学到的主要不是“传输路径里的 secret”，而是“同类 prompt、相近长度、相同 layer/token position 下 routing 分布有相似性”。
 
-### 9.2 如果 timing-only 以后变强，应该怎么归类
+### 10.2 如果 timing-only 以后变强，应该怎么归类
 
 如果未来扩大实验后发现仅使用 generate wall time 或模块级 latency 就能预测 top-k，那也不能自动归类为 CPU-GPU transfer path 泄露。更合理的分类是：
 
@@ -326,7 +453,7 @@ tokens_per_expert = 1, 4, 16, 64, 256
 
 只有当额外信息明确来自 H2D/D2H transfer size、direction、copy timing 等传输路径变量，并且超过长度匹配等负控，才应讨论 CPU-GPU transfer path leakage。
 
-## 10. 当前局限
+## 11. 当前局限
 
 这份报告是第一版实验结果，不是最终论文级结论。
 
@@ -340,8 +467,9 @@ tokens_per_expert = 1, 4, 16, 64, 256
 - 没有 CC-DevTools，因此没有 Nsight/NVTX 或驱动内部 attribution。
 - bounce buffer 和 GPU DMA 解密事件仍然是黑盒估计，不是直接观测。
 - 当前 evaluator 是轻量 KNN，用于验证侧信道信号，不代表最强攻击模型。
+- 显存不足时 `device_map=auto` 会自动 CPU offload，因此该场景必须和全 GPU 驻留实验分开解释。
 
-## 11. 建议的下一步
+## 12. 建议的下一步
 
 为了把结论做得更稳，应继续做以下实验：
 
@@ -352,8 +480,9 @@ tokens_per_expert = 1, 4, 16, 64, 256
 5. 增加 batch size sweep，观察 batching 是否引入新的可观察差异。
 6. 增加 max_new_tokens sweep，区分 prefill 和 decode 影响。
 7. 如果未来有 CC-Off 或 CC-DevTools 环境，再补充非 CC 对照和更细 attribution。
+8. 对 `memory-pressure-offload` 单独设计实验，记录 `hf_device_map`、CPU offload 模块、生成耗时和新增 transfer 特征。
 
-## 12. 复现实验命令
+## 13. 复现实验命令
 
 安装依赖：
 
@@ -415,7 +544,35 @@ conda run -n CC cc-path-bench \
   --gemm-repeat 50
 ```
 
-## 13. 参考资料
+运行显存压力观测：
+
+```bash
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+conda run -n CC memory-pressure-observe \
+  --run-id qwen-memory-pressure-load-only \
+  --out runs/qwen-memory-pressure-load-only \
+  --model /root/models/Qwen3-30B-A3B-Instruct-2507 \
+  --prompts prompts/smoke.txt \
+  --reserve-gb 0,35,45 \
+  --trust-remote-code
+```
+
+运行无显存压力的 1 token generate baseline：
+
+```bash
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+conda run -n CC memory-pressure-observe \
+  --run-id qwen-memory-pressure-baseline-generate \
+  --out runs/qwen-memory-pressure-baseline-generate \
+  --model /root/models/Qwen3-30B-A3B-Instruct-2507 \
+  --prompts prompts/smoke.txt \
+  --reserve-gb 0 \
+  --run-generate \
+  --max-new-tokens 1 \
+  --trust-remote-code
+```
+
+## 14. 参考资料
 
 - NVIDIA Hopper Confidential Computing whitepaper: <https://images.nvidia.com/aem-dam/en-zz/Solutions/data-center/HCC-Whitepaper-v1.0.pdf>
 - NVIDIA Confidential Computing Deployment Guide: <https://docs.nvidia.com/cc-deployment-guide-tdx-snp.pdf>

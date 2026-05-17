@@ -1,0 +1,41 @@
+kind,operator,bytes,theoretical_ms,effective_bandwidth_gbps_reference,tokens,hidden_size,num_experts_per_tok,direction,description,tokens_per_expert,m,k,n,dtype,num_experts,flops,measured_ms,achieved_tflops,peak_tflops_reference
+io,host_device_tensor_transfer,4000,0.001,4.0,,,,,,,,,,,,,,,
+io,host_device_tensor_transfer,64000,0.016,4.0,,,,,,,,,,,,,,,
+io,host_device_tensor_transfer,1000000,0.25,4.0,,,,,,,,,,,,,,,
+io,host_device_tensor_transfer,16000000,4.0,4.0,,,,,,,,,,,,,,,
+io,host_device_tensor_transfer,64000000,16.0,4.0,,,,,,,,,,,,,,,
+io_moe_shape,token_ids_h2d,8,2.0000000000000003e-06,4.0,1,2048,8,H2D,input token id tensor,,,,,,,,,,
+io_moe_shape,hidden_states_h2d,4096,0.0010240000000000002,4.0,1,2048,8,H2D,"BF16 hidden-state tensor shape [tokens, hidden_size]",,,,,,,,,,
+io_moe_shape,router_like_topk_index_tensor_h2d,64,1.6000000000000003e-05,4.0,1,2048,8,H2D,"top-k expert index tensor shape [tokens, experts_per_token]",,,,,,,,,,
+io_moe_shape,expert_dispatch_like_gather_buffer_h2d,32768,0.008192000000000001,4.0,1,2048,8,H2D,BF16 expert dispatch gather/scatter buffer,,,,,,,,,,
+io_moe_shape,expert_dispatch_like_scatter_buffer_d2h,32768,0.008192000000000001,4.0,1,2048,8,D2H,BF16 expert dispatch gather/scatter buffer,,,,,,,,,,
+io_moe_shape,token_ids_h2d,128,3.2000000000000005e-05,4.0,16,2048,8,H2D,input token id tensor,,,,,,,,,,
+io_moe_shape,hidden_states_h2d,65536,0.016384000000000003,4.0,16,2048,8,H2D,"BF16 hidden-state tensor shape [tokens, hidden_size]",,,,,,,,,,
+io_moe_shape,router_like_topk_index_tensor_h2d,1024,0.00025600000000000004,4.0,16,2048,8,H2D,"top-k expert index tensor shape [tokens, experts_per_token]",,,,,,,,,,
+io_moe_shape,expert_dispatch_like_gather_buffer_h2d,524288,0.13107200000000002,4.0,16,2048,8,H2D,BF16 expert dispatch gather/scatter buffer,,,,,,,,,,
+io_moe_shape,expert_dispatch_like_scatter_buffer_d2h,524288,0.13107200000000002,4.0,16,2048,8,D2H,BF16 expert dispatch gather/scatter buffer,,,,,,,,,,
+io_moe_shape,token_ids_h2d,1024,0.00025600000000000004,4.0,128,2048,8,H2D,input token id tensor,,,,,,,,,,
+io_moe_shape,hidden_states_h2d,524288,0.13107200000000002,4.0,128,2048,8,H2D,"BF16 hidden-state tensor shape [tokens, hidden_size]",,,,,,,,,,
+io_moe_shape,router_like_topk_index_tensor_h2d,8192,0.0020480000000000003,4.0,128,2048,8,H2D,"top-k expert index tensor shape [tokens, experts_per_token]",,,,,,,,,,
+io_moe_shape,expert_dispatch_like_gather_buffer_h2d,4194304,1.0485760000000002,4.0,128,2048,8,H2D,BF16 expert dispatch gather/scatter buffer,,,,,,,,,,
+io_moe_shape,expert_dispatch_like_scatter_buffer_d2h,4194304,1.0485760000000002,4.0,128,2048,8,D2H,BF16 expert dispatch gather/scatter buffer,,,,,,,,,,
+io_moe_shape,token_ids_h2d,8192,0.0020480000000000003,4.0,1024,2048,8,H2D,input token id tensor,,,,,,,,,,
+io_moe_shape,hidden_states_h2d,4194304,1.0485760000000002,4.0,1024,2048,8,H2D,"BF16 hidden-state tensor shape [tokens, hidden_size]",,,,,,,,,,
+io_moe_shape,router_like_topk_index_tensor_h2d,65536,0.016384000000000003,4.0,1024,2048,8,H2D,"top-k expert index tensor shape [tokens, experts_per_token]",,,,,,,,,,
+io_moe_shape,expert_dispatch_like_gather_buffer_h2d,33554432,8.388608000000001,4.0,1024,2048,8,H2D,BF16 expert dispatch gather/scatter buffer,,,,,,,,,,
+io_moe_shape,expert_dispatch_like_scatter_buffer_d2h,33554432,8.388608000000001,4.0,1024,2048,8,D2H,BF16 expert dispatch gather/scatter buffer,,,,,,,,,,
+compute,expert_gate_projection,,2.1254918918918917e-05,,,,,,,1,1,2048,768,bfloat16,128,3145728,0.01449728012084961,0.21698746066690786,148.0
+compute,expert_up_projection,,2.1254918918918917e-05,,,,,,,1,1,2048,768,bfloat16,128,3145728,0.014173439741134643,0.22194527633756825,148.0
+compute,expert_down_projection,,2.1254918918918917e-05,,,,,,,1,1,768,2048,bfloat16,128,3145728,0.01561344027519226,0.20147564819511016,148.0
+compute,expert_gate_projection,,8.501967567567567e-05,,,,,,,4,4,2048,768,bfloat16,128,12582912,0.027851519584655763,0.4517854748195608,148.0
+compute,expert_up_projection,,8.501967567567567e-05,,,,,,,4,4,2048,768,bfloat16,128,12582912,0.02704256057739258,0.4653003166615531,148.0
+compute,expert_down_projection,,8.501967567567567e-05,,,,,,,4,4,768,2048,bfloat16,128,12582912,0.014596480131149291,0.8620511169091868,148.0
+compute,expert_gate_projection,,0.00034007870270270267,,,,,,,16,16,2048,768,bfloat16,128,50331648,0.027118721008300782,1.8559742542649398,148.0
+compute,expert_up_projection,,0.00034007870270270267,,,,,,,16,16,2048,768,bfloat16,128,50331648,0.027352960109710694,1.8400804811663343,148.0
+compute,expert_down_projection,,0.00034007870270270267,,,,,,,16,16,768,2048,bfloat16,128,50331648,0.015224319696426392,3.306003092658016,148.0
+compute,expert_gate_projection,,0.0013603148108108107,,,,,,,64,64,2048,768,bfloat16,128,201326592,0.02766592025756836,7.277061096311249,148.0
+compute,expert_up_projection,,0.0013603148108108107,,,,,,,64,64,2048,768,bfloat16,128,201326592,0.028366079330444337,7.097441618726741,148.0
+compute,expert_down_projection,,0.0013603148108108107,,,,,,,64,64,768,2048,bfloat16,128,201326592,0.015553920269012452,12.943784494067142,148.0
+compute,expert_gate_projection,,0.005441259243243243,,,,,,,256,256,2048,768,bfloat16,128,805306368,0.021621119976043702,37.246283675049355,148.0
+compute,expert_up_projection,,0.005441259243243243,,,,,,,256,256,2048,768,bfloat16,128,805306368,0.020955519676208498,38.42931983759349,148.0
+compute,expert_down_projection,,0.005441259243243243,,,,,,,256,256,768,2048,bfloat16,128,805306368,0.015541759729385375,51.81564906561885,148.0

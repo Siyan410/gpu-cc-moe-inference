@@ -1,0 +1,5 @@
+kind,operator,bytes,theoretical_ms,effective_bandwidth_gbps_reference,tokens_per_expert,m,k,n,dtype,flops,measured_ms,achieved_tflops,peak_tflops_reference
+io,host_device_tensor_transfer,4000,0.001,4.0,,,,,,,,,
+compute,expert_gate_projection,,2.1254918918918917e-05,,1,1,2048,768,bfloat16,3145728,0.07049600034952164,0.044622786887247086,148.0
+compute,expert_up_projection,,2.1254918918918917e-05,,1,1,2048,768,bfloat16,3145728,0.050144001841545105,0.06273388410323713,148.0
+compute,expert_down_projection,,2.1254918918918917e-05,,1,1,768,2048,bfloat16,3145728,0.047520000487565994,0.0661979791187735,148.0
