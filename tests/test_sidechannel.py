@@ -45,6 +45,7 @@ class SidechannelTests(unittest.TestCase):
         self.assertIn("per_expert_f1", result["metrics"])
         self.assertIn("label_shuffle", result["negative_controls"])
         self.assertIn("length_matched_prompt", result["negative_controls"])
+        self.assertIn("main_minus_length_matched_prompt", result["negative_control_deltas"])
 
 
 if __name__ == "__main__":

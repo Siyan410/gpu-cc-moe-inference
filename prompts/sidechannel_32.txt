@@ -1,0 +1,32 @@
+Explain GPU confidential computing for inference in one compact technical paragraph.
+Describe how mixture of experts routing selects experts for each token during inference.
+Summarize why encrypted CPU to GPU transfers may reduce effective bandwidth.
+List practical deployment risks when serving large language models in a TEE.
+Compare a bandwidth bound tensor copy with a compute bound BF16 matrix multiply.
+Explain why full GPU resident model weights should avoid expert streaming traffic.
+Describe what an attacker can observe from transfer sizes and external timing only.
+Summarize how label shuffle controls help validate a side channel experiment.
+Explain why router logits must be excluded from attacker observable features.
+Describe how CUDA event timing differs from CPU wall clock timing in benchmarks.
+List the fields needed to reproduce a GPU confidential computing benchmark.
+Explain why bounce buffer timing is estimated rather than directly observed.
+Describe how token length can confound side channel prediction measurements.
+Summarize how top-k expert labels are used as offline ground truth only.
+Compare prefill and decode phases for a transformer inference workload.
+Explain why timing-only leakage is distinct from CPU GPU transfer leakage.
+Describe how PCIe link width and generation affect transfer roofline estimates.
+List operator shapes for Qwen3 MoE expert feed forward projections.
+Explain how expert dispatch gather buffers differ from token id transfers.
+Summarize why negative controls are required in security measurements.
+Describe how BF16 activation size affects hidden state transfer estimates.
+Explain why a single GPU serving path changes the side channel prior.
+Compare trusted instrumentation runs with attacker feature collection runs.
+List safe output artifacts for reproducing routing side channel evaluation.
+Explain how per expert AUC and F1 quantify multi label prediction quality.
+Describe why hidden states are not valid attacker features in this study.
+Summarize why Nsight is optional when CC DevTools are unavailable.
+Explain how CPU syscall time can be separated from CUDA copy synchronization.
+Describe how prompt batching can change transfer and execution timing traces.
+List assumptions needed before interpreting transfer only prediction results.
+Explain why expert ids should remain inside GPU execution for this setup.
+Summarize the expected null result for transfer only expert prediction.

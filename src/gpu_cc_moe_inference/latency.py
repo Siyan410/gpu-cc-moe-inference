@@ -18,11 +18,11 @@ SCHEMA_VERSION = "moe-latency-v1"
 
 def categorize_module(name: str) -> str | None:
     lowered = name.lower()
-    if "attn" in lowered or "attention" in lowered:
+    if re.search(r"(^|\.)(self_attn|attention)$", lowered):
         return "attention"
-    if "router" in lowered or re.search(r"(^|\.)gate($|\.)", lowered):
+    if "router" in lowered or re.search(r"(^|\.)gate$", lowered):
         return "router"
-    if "moe" in lowered or "expert" in lowered or "sparsemixer" in lowered:
+    if re.search(r"(^|\.)(mlp|moe|sparse_moe|sparsemixer)$", lowered):
         return "moe_ffn"
     return None
 

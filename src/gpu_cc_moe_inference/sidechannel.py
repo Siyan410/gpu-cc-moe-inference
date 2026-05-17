@@ -178,6 +178,42 @@ def predict_knn(
     return predictions
 
 
+def _group_key(row: dict[str, Any], fields: tuple[str, ...]) -> tuple[Any, ...]:
+    return tuple(row[field] for field in fields)
+
+
+def _fallback_train_rows(
+    train_rows: list[dict[str, Any]], test_row: dict[str, Any]
+) -> list[dict[str, Any]]:
+    same_layer = [row for row in train_rows if row["layer"] == test_row["layer"]]
+    return same_layer or train_rows
+
+
+def predict_grouped_knn(
+    train_rows: list[dict[str, Any]],
+    test_rows: list[dict[str, Any]],
+    *,
+    neighbors: int,
+    group_fields: tuple[str, ...] = ("layer", "token_index"),
+) -> list[dict[str, Any]]:
+    grouped_train: dict[tuple[Any, ...], list[dict[str, Any]]] = defaultdict(list)
+    grouped_test: dict[tuple[Any, ...], list[dict[str, Any]]] = defaultdict(list)
+    for row in train_rows:
+        grouped_train[_group_key(row, group_fields)].append(row)
+    for row in test_rows:
+        grouped_test[_group_key(row, group_fields)].append(row)
+
+    predictions: list[dict[str, Any]] = []
+    for key, tests in grouped_test.items():
+        train_group = grouped_train.get(key)
+        if not train_group:
+            train_group = _fallback_train_rows(train_rows, tests[0])
+        predictions.extend(
+            predict_knn(train_group, tests, neighbors=min(neighbors, len(train_group)))
+        )
+    return predictions
+
+
 def exact_match(true: list[int], predicted: list[int]) -> float:
     return 1.0 if set(true) == set(predicted) else 0.0
 
@@ -290,6 +326,20 @@ def summarize_predictions(predictions: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def metric_deltas(
+    main: dict[str, Any], control: dict[str, Any], metric_names: list[str]
+) -> dict[str, float | None]:
+    deltas: dict[str, float | None] = {}
+    for name in metric_names:
+        left = main.get(name)
+        right = control.get(name)
+        if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+            deltas[name] = float(left) - float(right)
+        else:
+            deltas[name] = None
+    return deltas
+
+
 def evaluate_sidechannel(
     labels: list[dict[str, Any]],
     features: list[dict[str, Any]],
@@ -306,7 +356,7 @@ def evaluate_sidechannel(
     train_indices, test_indices = split_train_test(joined, test_fraction, seed)
     train_rows = [joined[index] for index in train_indices]
     test_rows = [joined[index] for index in test_indices]
-    predictions = predict_knn(train_rows, test_rows, neighbors=neighbors)
+    predictions = predict_grouped_knn(train_rows, test_rows, neighbors=neighbors)
 
     rng = random.Random(seed)
     shuffled_train = [dict(row) for row in train_rows]
@@ -314,9 +364,21 @@ def evaluate_sidechannel(
     rng.shuffle(shuffled_labels)
     for row, shuffled in zip(shuffled_train, shuffled_labels):
         row["topk"] = shuffled
-    shuffle_predictions = predict_knn(shuffled_train, test_rows, neighbors=neighbors)
+    shuffle_predictions = predict_grouped_knn(
+        shuffled_train, test_rows, neighbors=neighbors
+    )
 
-    length_predictions = predict_length_matched(train_rows, test_rows)
+    length_predictions = predict_length_matched_grouped(train_rows, test_rows)
+    metrics = summarize_predictions(predictions)
+    label_shuffle_metrics = summarize_predictions(shuffle_predictions)
+    length_matched_metrics = summarize_predictions(length_predictions)
+    comparable_metrics = [
+        "topk_exact_match",
+        "topk_jaccard",
+        "micro_f1",
+        "per_expert_auc_macro",
+        "per_expert_f1_macro",
+    ]
     return {
         "schema_version": "sidechannel-eval-v1",
         "rows_joined": len(joined),
@@ -324,10 +386,18 @@ def evaluate_sidechannel(
         "test_rows": len(test_rows),
         "model": "standardized_knn_multilabel",
         "neighbors": neighbors,
-        "metrics": summarize_predictions(predictions),
+        "metrics": metrics,
         "negative_controls": {
-            "label_shuffle": summarize_predictions(shuffle_predictions),
-            "length_matched_prompt": summarize_predictions(length_predictions),
+            "label_shuffle": label_shuffle_metrics,
+            "length_matched_prompt": length_matched_metrics,
+        },
+        "negative_control_deltas": {
+            "main_minus_label_shuffle": metric_deltas(
+                metrics, label_shuffle_metrics, comparable_metrics
+            ),
+            "main_minus_length_matched_prompt": metric_deltas(
+                metrics, length_matched_metrics, comparable_metrics
+            ),
         },
         "interpretation_note": (
             "Labels are offline ground truth only. Attacker features must not include "
@@ -364,6 +434,24 @@ def predict_length_matched(
                 "scores": {expert: float(score) for expert, score in counter.items()},
             }
         )
+    return predictions
+
+
+def predict_length_matched_grouped(
+    train_rows: list[dict[str, Any]], test_rows: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    grouped_train: dict[tuple[Any, int], list[dict[str, Any]]] = defaultdict(list)
+    grouped_test: dict[tuple[Any, int], list[dict[str, Any]]] = defaultdict(list)
+    for row in train_rows:
+        grouped_train[(row["layer"], row["token_index"])].append(row)
+    for row in test_rows:
+        grouped_test[(row["layer"], row["token_index"])].append(row)
+    predictions: list[dict[str, Any]] = []
+    for key, tests in grouped_test.items():
+        train_group = grouped_train.get(key)
+        if not train_group:
+            train_group = _fallback_train_rows(train_rows, tests[0])
+        predictions.extend(predict_length_matched(train_group, tests))
     return predictions
 
 

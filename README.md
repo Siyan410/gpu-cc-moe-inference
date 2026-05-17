@@ -18,7 +18,7 @@ If `nvidia-smi` shows the H20 but `torch.cuda.is_available()` is false, check th
 
 ```bash
 conda run -n CC python -m pip install -e .
-conda run -n CC python -m pip install -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple transformers accelerate
+conda run -n CC python -m pip install -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple "transformers>=4.57,<5" accelerate
 
 cc-path-bench --out runs/cc-on-transfer --repeat 20 --operator-roofline
 routing-sidechannel trusted-label-run --out runs/labels --model Qwen/Qwen3-30B-A3B-Instruct-2507 --prompts prompts.txt
