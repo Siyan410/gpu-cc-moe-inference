@@ -16,6 +16,8 @@ instrumentation, and memory-pressure behavior are not mixed together.
 - `memory-pressure-observe`: observes whether the current Transformers
   `device_map=auto` inference path remains GPU-resident or starts CPU/disk
   offload under artificial GPU memory pressure.
+- `overhead-amplification`: runs matched prompt/request-shape workloads for
+  CC-On versus CC-Off availability experiments and computes ratio-of-ratios.
 
 The default threat model is guest/CVM root only. The code does not claim direct
 observation of real bounce-buffer addresses, GPU DMA decrypt events, or host
@@ -79,6 +81,21 @@ memory-pressure-observe \
   --model Qwen/Qwen3-30B-A3B-Instruct-2507 \
   --prompts prompts/smoke.txt \
   --reserve-gb 0,35,45
+
+overhead-amplification run-transformers \
+  --run-id overhead-on-pilot \
+  --out runs/overhead-on-pilot \
+  --model /root/models/Qwen3-30B-A3B-Instruct-2507 \
+  --cc-mode on \
+  --suite pilot \
+  --batch-sizes 1 \
+  --repeats 3 \
+  --trust-remote-code
+
+overhead-amplification compare \
+  --cc-on runs/overhead-on-pilot \
+  --cc-off runs/overhead-off-pilot \
+  --out runs/overhead-compare-pilot
 ```
 
 ## Output Files
@@ -105,6 +122,16 @@ Common output:
 `memory-pressure-observe` output:
 
 - `memory_pressure_observations.jsonl`
+
+`overhead-amplification run-transformers` output:
+
+- `overhead_measurements.jsonl`
+- `overhead_summary.json`
+
+`overhead-amplification compare` output:
+
+- `overhead_comparison.json`
+- `overhead_comparison.csv`
 
 Plot files under `plots/*.png` may be added when plotting dependencies and
 plotting scripts are present. They are not required by the core CLIs.
@@ -205,6 +232,54 @@ Observed behavior:
 
 The directory `runs/qwen-memory-pressure/` currently contains only `env.json`,
 so it appears to be an incomplete or setup-only run.
+
+### Prompt-Induced Overhead Amplification
+
+The `overhead-amplification` CLI is intended for paired CC-On and CC-Off runs.
+Run the same command on both machines and change only `--cc-mode` plus the
+output directory. The built-in suites are:
+
+- `smoke`: short functional check.
+- `pilot`: first useful run for baseline, decode-heavy, JSON-prompt,
+  long-context, and streaming-step workloads.
+- `full`: larger output and context sweep for stronger p95/p99 evidence.
+
+Convenience script for the current Alibaba Cloud model path:
+
+```bash
+CC_MODE=on bash scripts/run_overhead_pilot.sh
+CC_MODE=off bash scripts/run_overhead_pilot.sh
+```
+
+Optional environment variables:
+
+```bash
+SUITE=smoke|pilot|full
+BATCH_SIZES=1,8
+REPEATS=5
+MEASURE_TTFT_PROXY=1
+MODEL=/root/models/Qwen3-30B-A3B-Instruct-2507
+OUT=runs/custom-output-dir
+```
+
+After copying both run directories onto one machine:
+
+```bash
+overhead-amplification compare \
+  --cc-on runs/overhead-on-pilot \
+  --cc-off runs/overhead-off-pilot \
+  --out runs/overhead-compare-pilot
+```
+
+The main quantity to inspect is `ratio_of_ratios.latency_ms` or
+`ratio_of_ratios.tpot_ms`:
+
+```text
+(CC-On stress / CC-Off stress) / (CC-On baseline / CC-Off baseline)
+```
+
+A value above 1 means the workload amplifies CC-specific overhead relative to
+the normal baseline workload.
 
 ## Security Interpretation
 

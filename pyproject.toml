@@ -20,6 +20,7 @@ cc-path-bench = "gpu_cc_moe_inference.cli.cc_path_bench:main"
 routing-sidechannel = "gpu_cc_moe_inference.cli.routing_sidechannel:main"
 moe-latency-instrument = "gpu_cc_moe_inference.cli.moe_latency_instrument:main"
 memory-pressure-observe = "gpu_cc_moe_inference.cli.memory_pressure_observe:main"
+overhead-amplification = "gpu_cc_moe_inference.overhead:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
